@@ -1,0 +1,17 @@
+[theme]
+# Primary background: A deep, rich obsidian charcoal shade
+backgroundColor = "#0F172A"
+
+# Sidebar background: A slightly lighter, contrasting dark slate blue
+sidebarBackgroundColor = "#1E293B"
+
+# Input cards & dropdown boxes: Elevated gray boxes that pop out beautifully
+secondaryBackgroundColor = "#334155"
+
+# Primary buttons, sliders, and highlights: A vibrant, glowing electric indigo/purple
+primaryColor = "#6366F1"
+
+# Text readability: Crisp, clean ice-white so parameters are easy to read
+textColor = "#F8FAFC"
+
+font = "sans serif"
