@@ -1,4 +1,4 @@
-# app/pages/01_🚀_Predict_Single.py
+
 import streamlit as st
 import pandas as pd
 import shap
@@ -7,13 +7,13 @@ import numpy as np
 import sys
 import os
 
-# 1. Dynamically find the main 'churnsense' project directory root
+#  Dynamically find the main 'churnsense' project directory root
 root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 
-# 2. Force Python to include it in its module search paths
 if root_path not in sys.path:
     sys.path.insert(0, root_path)
 
+# ==========================================================================================
 # STYLE
 st.markdown("""
 <style>
@@ -31,9 +31,9 @@ section[data-testid="stSidebar"] {
 </style>
 """, unsafe_allow_html=True)
 
+# ==========================================================================================
 from src.model import load_model_xgb, predict_single
 
-st.set_page_config(page_title="ChurnSense — Single Inference", page_icon="🧍", layout="wide")
 
 st.title(" 🧍‍♂️ Single Customer Risk Assessment")
 st.markdown("---")
@@ -85,7 +85,6 @@ with st.form("single_customer_form"):
     submit_btn = st.form_submit_button("🔮 Compute Churn Risk Profile")
 
 if submit_btn:
-    # Bundle input features into a payload dictionary matching model parameters
     customer_payload = {
         'gender': gender, 'SeniorCitizen': SeniorCitizen, 'Partner': Partner, 'Dependents': Dependents,
         'tenure': tenure, 'PhoneService': PhoneService, 'MultipleLines': MultipleLines,
@@ -116,14 +115,13 @@ if submit_btn:
 
     # ====================================================================
     #  MODEL EVALUATION VISUALIZATIONS
-    # ====================================================================
 
     st.write("---")
     st.subheader("🎯 Model Performance & Explainability Analytics")
 
-    tab3, = st.tabs(["🧬 SHAP Feature Importance"])
+    tab1, = st.tabs(["🧬 SHAP Feature Importance"])
 
-    with tab3:
+    with tab1:
         st.markdown("#### Customer-Specific SHAP Impact Explainer")
         st.write("Features pushing this specific customer toward or away from churning.")
 
@@ -158,6 +156,23 @@ if submit_btn:
 
             explainer = shap.TreeExplainer(raw_model)
             shap_values = explainer(X_encoded)
+            
+
+            # STRIP ENGINEERING PREFIXES FROM SHAP PLOT LABELS
+            if hasattr(shap_values, "feature_names") and shap_values.feature_names is not None:
+                clean_names = []
+                for name in shap_values.feature_names:
+                    # Remove structural prefixes like 'cat__' or 'ordinal_cat__'
+                    if '__' in name:
+                        name = name.split('__')[1]
+                    # Replace underscores with clean spaces for a polished presentation look
+                    clean_names.append(name.replace('_', ' '))
+                shap_values.feature_names = clean_names
+
+            fig, ax = plt.subplots(figsize=(8, 4))
+            fig.patch.set_facecolor('#1E293B')
+            ax.set_facecolor('#1E293B')
+            shap.plots.bar(shap_values[0], max_display=20, show=False)
 
             fig, ax = plt.subplots(figsize=(8, 4))
             fig.patch.set_facecolor('#1E293B')

@@ -1,4 +1,6 @@
 # app/pages/03_📊_Analytics.py
+from unicodedata import name
+
 import matplotlib
 from sklearn.metrics import auc, roc_curve
 import streamlit as st
@@ -24,7 +26,6 @@ section[data-testid="stSidebar"] {
 """, unsafe_allow_html=True)
 
 
-st.set_page_config(page_title="ChurnSense — Batch Analytics", page_icon="📊", layout="wide")
 
 st.title("📊 Batch Analytics Dashboard")
 st.markdown("---")
@@ -80,10 +81,10 @@ with col2:
     fig_hist = px.histogram(
         df, 
         x='churn_probability', 
-        nbins=20, 
+        nbins=25, 
         title='Distribution Grid of Customer Churn Probabilities',
         labels={'churn_probability': 'Calculated Churn Probability'},
-        color_discrete_sequence=['#3d8eff']
+        color_discrete_sequence=["#3ede1e"]
     )
     fig_hist.update_layout(yaxis_title_text='Customer Count')
     st.plotly_chart(fig_hist, use_container_width=True)
@@ -95,7 +96,7 @@ tab1, tab2, tab3, tab4= st.tabs(["Confusion Matrix", "Roc-Auc Curve", "Precision
 with tab1:
     # --- ADD THIS: PLOTLY CONFUSION MATRIX IN TAB 1 ---
         st.markdown("---")
-        st.subheader("🧩 Confusion Matrix Grid")
+        st.subheader("🧩 Confusion Matrix")
         st.write("Track true classification boundaries against actual false alarms.")
         
         from sklearn.metrics import confusion_matrix
@@ -104,7 +105,9 @@ with tab1:
 
         # Compute raw confusion matrix values
         # Assumes your model threshold defaults to 0.5 for binary classification
-        y_pred = (df['churn_probability'] > 0.5).astype(int)
+        # Optimize the binary threshold to account for the 2.77x minority class weight scale
+        prediction_threshold = 0.38 
+        y_pred = (df['churn_probability'] > prediction_threshold).astype(int)
         cm = confusion_matrix(y_true, y_pred)
         
         # Build an interactive Plotly Heatmap
@@ -143,7 +146,7 @@ with tab2:
     fig.patch.set_facecolor('none')  # Transparent canvas background
     ax.set_facecolor('#1e293b')      # Slate dark plot background
         
-    ax.plot(fpr, tpr, color='#ff9f1c', label=f'XGBoost (AUC = {roc_auc:.4f})', linewidth=2.5)
+    ax.plot(fpr, tpr, color='#ff9f1c', label=f'(Score= {roc_auc:.4f})', linewidth=2.5)
     ax.plot([0, 1], [0, 1], color='white', linestyle='--', alpha=0.5)
         
     ax.set_xlim([0.0, 1.0])
@@ -178,13 +181,13 @@ with tab3:
     fig.patch.set_facecolor('none')
     ax.set_facecolor('#1e293b')
         
-    ax.plot(recall, precision, color='#2ec4b6', label=f'PR Curve (AP = {avg_precision:.4f})', linewidth=2.5)
+    ax.plot(recall, precision, color='#2ec4b6', linewidth=2.5)
         
     ax.set_xlim([0.0, 1.0])
     ax.set_ylim([0.0, 1.05])
     ax.set_xlabel('Recall', color='white')
     ax.set_ylabel('Precision', color='white')
-    ax.set_title('Precision-Recall Profile Matrix', color='white', pad=10)
+    ax.set_title('Precision-Recall Curve', color='white', pad=10)
     ax.tick_params(colors='white')
     ax.legend(loc="lower left")
     ax.grid(True, linestyle=':', alpha=0.3)
@@ -202,71 +205,264 @@ with tab4:
     if 'trained_model' not in st.session_state:
         st.error("⚠️ Model object pipeline not found in session state. Please re-run the Batch Prediction upload first.")
     else:
-        try:
-            import matplotlib.pyplot as plt
-            import numpy as np
+        import matplotlib.pyplot as plt
+        import numpy as np
 
             # 1. Retrieve the pipeline object from session state
-            pipeline_model = st.session_state['trained_model']
+        pipeline_model = st.session_state['trained_model']
+
+            # 2. Extract the preprocessor and classifier steps from the Pipeline
+        preprocessor = pipeline_model.named_steps['preprocessor']
+        xgb_classifier = pipeline_model.named_steps['model']
+
+            # Helper function to clean feature names
+        def clean_feature_name(name):
+                clean_name = (name.replace('cat: ', '')
+                          .replace('ordinal cat: ', '')
+                          .replace('cat__', '')
+                          .replace('ordinal_cat__', '')
+                          .replace('num__', '')
+                          .replace('ordinal__', '')
+                          .replace('ordinal', '')
+                          .replace('skewed__', '')
+                          .replace('num:', ''))
+        
+                # Handle one-hot encoded categories: "InternetService__Fiber optic" → "Internet Service: Fiber optic"
+                if '__' in clean_name:
+                    parts = clean_name.split('__', 1)
+                    if len(parts) == 2:
+                        column_name, category_value = parts
+                        return f"{column_name.replace('_', ' ')}: {category_value}"
+        
+                return clean_name.replace('_', ' ')
+
+            # 3. Process data & compute True SHAP values
+        try:
+                import shap
+        
+                # Transform the batch data currently stored in session state
+                df_batch = df
+                X_batch = df_batch.drop(columns=['Churn', 'customerID'], errors='ignore')
+                X_transformed = preprocessor.transform(X_batch)
+        
+                # Get cleaned feature names
+                raw_names = preprocessor.get_feature_names_out().tolist()
+                cleaned_names = [clean_feature_name(name) for name in raw_names]
+        
+                # Calculate SHAP explanation values
+                explainer = shap.TreeExplainer(xgb_classifier)
+                shap_values = explainer(X_transformed)
+                shap_values.feature_names = cleaned_names
+        
+        except Exception as e:
+                st.error(f"Failed to calculate global SHAP values. Error: {e}")
+                st.stop()
+
+    # 4. Render the styled matplotlib SHAP chart
+    fig, ax = plt.subplots(figsize=(10, 8))
+    fig.patch.set_facecolor('none')
+    ax.set_facecolor('#1e293b')
+
+    # Draw the true global SHAP summary bar plot
+    shap.plots.bar(shap_values, max_display=20, show=False)
+
+    # Style overrides: Change bars to cyan and text labels to white
+    for patch in ax.patches:
+        patch.set_facecolor('#06B6D4')  # Cyan bar fill
+        patch.set_edgecolor('#FFFFFF')  # White border
+        patch.set_alpha(0.9)
+
+    for text in ax.texts:
+        text.set_color('#FFFFFF')      # White numeric labels (+0.368, etc.)
+        text.set_fontsize(9)
+
+    ax.set_title('Global SHAP Feature Importance Profile', color='white', fontsize=12, pad=15)
+    ax.tick_params(colors='white', labelsize=9)
+    ax.xaxis.label.set_color('white')
+    
+    for spine in ax.spines.values():
+        spine.set_color('#0284C7')
+
+    st.pyplot(fig)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            # 1. Retrieve the pipeline object from session state
+     #       pipeline_model = st.session_state['trained_model']
             
             # 2. Extract the preprocessor and classifier steps from the Pipeline
-            preprocessor = pipeline_model.named_steps['preprocessor']
-            xgb_classifier = pipeline_model.named_steps['model']
-
-            feature_names = preprocessor.get_feature_names_out().tolist()
-            feature_names = [name.split('__', 1)[-1] for name in feature_names]
-
-            encoded_feature_names = feature_names
-
-
-            # 3. Dynamically reconstruct numerical and categorical feature arrays
-            #num_cols = ['tenure', 'MonthlyCharges', 'TotalCharges']
+       #     preprocessor = pipeline_model.named_steps['preprocessor']
+      #      xgb_classifier = pipeline_model.named_steps['model']
             
-            # Isolate the categorical encoder object from the ColumnTransformer
-            #cat_encoder = preprocessor.named_transformers_['cat']
-            
-            # Extract original categorical strings from the current batch dataframe
-            #cat_cols = [col for col in df.columns if df[col].dtype == 'object' and col not in ['customerID', 'Churn', 'risk_level']]
-            
-            # Retrieve post-One-Hot-Encoded column transformations
-            #encoded_cat_names = cat_encoder.get_feature_names_out(cat_cols).tolist()
-            #all_feature_names = num_cols + encoded_cat_names
+
+            #feature_names = preprocessor.get_feature_names_out().tolist()
+            #feature_names = [name.split('__', 1)[-1] for name in feature_names]
+
+            #encoded_feature_names = feature_names
+            # Helper function to clean feature names
+       #     def clean_feature_name(name):
+            #"""
+            #Strip preprocessing prefixes and format for readability.
+           # E.g., "cat: InternetService__Fiber optic" → "Internet Service: Fiber optic"
+           # """
+    # Strip preprocessing prefixes (cat:, ordinal cat:, etc.)
+       #         clean_name = name.replace('cat: ', '').replace('ordinal cat: ', '').replace('cat__', '').replace('ordinal_cat__', '').replace('num', '').replace('ordinal', '').replace('skewed', '')
+    # Handle one-hot encoded categorical: "InternetService__Fiber optic" → "Internet Service: Fiber optic"
+                
+        ##        if '__' in clean_name:
+        #            parts = clean_name.split('__', 1)
+        #            if len(parts) == 2:
+        #                column_name, category_value = parts
+        #            return f"{column_name.replace('_', ' ')}: {category_value}"
+    
+    # For ordinal and other features: just replace underscores with spaces
+        #        return clean_name.replace('_', ' ')
+
+
+        #    feature_names = preprocessor.get_feature_names_out().tolist()
+         #   feature_names = [clean_feature_name(name) for name in feature_names]
+
+        #    encoded_feature_names = feature_names
+
+           #st.write(feature_names)
+
+        
 
             # 4. Extract mathematical feature importances directly from the booster
-            importances = xgb_classifier.feature_importances_
+        #    importances = xgb_classifier.feature_importances_
 
             # 5. Map, sort, and isolate the top 10 most influential features
-            feature_importance_map = sorted(
-                zip(encoded_feature_names, importances), 
-                key=lambda x: x[1], 
-                reverse=True)[:20]
+        #    feature_importance_map = sorted(
+         #       zip(encoded_feature_names, importances), 
+         #       key=lambda x: x[1], 
+        #        reverse=True)[:20]
             
-            top_features, top_weights = zip(*feature_importance_map)
-            y_pos = np.arange(len(top_features))
+         #   top_features, top_weights = zip(*feature_importance_map)
+         #   y_pos = np.arange(len(top_features))
 
             # 6. Render the dark-themed matplotlib chart canvas
-            fig, ax = plt.subplots(figsize=(10, 8))
-            fig.patch.set_facecolor('none')
-            ax.set_facecolor('#1e293b')
+         #   fig, ax = plt.subplots(figsize=(10, 8))
+         #   fig.patch.set_facecolor('none')
+         #   ax.set_facecolor('#1e293b')
 
-            bars = ax.barh(y_pos, top_weights, align='center', color='#ff007f', alpha=0.9, edgecolor='white', height=0.6)
-            ax.bar_label(bars, fmt=' %.3f', color='white', fontsize=9, padding=4)
-            ax.set_yticks(y_pos)
-            ax.set_yticklabels(top_features, color='white', fontsize=9)
-            ax.invert_yaxis()  # Most critical drivers on top
+         #   bars = ax.barh(y_pos, top_weights, align='center', color='#ff007f', alpha=0.9, edgecolor='white', height=0.6)
+          ##  ax.bar_label(bars, fmt=' %.3f', color='white', fontsize=9, padding=4)
+         #   ax.set_yticks(y_pos)
+         #   ax.set_yticklabels(top_features, color='white', fontsize=9)
+         #   ax.invert_yaxis()  # Most critical drivers on top
             
-            ax.set_xlabel('Relative Gain Importance (XGBoost Feature Weight)', color='white', fontsize=9)
-            ax.set_title('Live Pipeline Feature Importance Profile', color='white', fontsize=11, pad=10)
-            ax.tick_params(colors='white', labelsize=9)
-            ax.grid(True, axis='x', linestyle=':', alpha=0.3)
+        #    ax.set_xlabel('Relative Gain Importance (XGBoost Feature Weight)', color='white', fontsize=9)
+         #   ax.set_title('Live Pipeline Feature Importance Profile', color='white', fontsize=11, pad=10)
+         #   ax.tick_params(colors='white', labelsize=9)
+          #  ax.grid(True, axis='x', linestyle=':', alpha=0.3)
 
-            for spine in ['top', 'right', 'bottom', 'left']:
-                ax.spines[spine].set_visible(False)
+         #   for spine in ['top', 'right', 'bottom', 'left']:
+         #       ax.spines[spine].set_visible(False)
 
-            st.pyplot(fig)
+         #   st.pyplot(fig)
 
-        except Exception as e:
-            st.error(f"Could not extract features dynamically from the model object pipeline. Details: {e}")
+     #   except Exception as e:
+      #      st.error(f"Could not extract features dynamically from the model object pipeline. Details: {e}")
 
 
 # Add a floating shortcut back to the uploader at the bottom for great UX

@@ -1,4 +1,4 @@
-# app/pages/01_🚀_Predict_Single.py
+
 import streamlit as st
 import pandas as pd
 import shap
@@ -7,13 +7,13 @@ import numpy as np
 import sys
 import os
 
-# 1. Dynamically find the main 'churnsense' project directory root
+#  Dynamically find the main 'churnsense' project directory root
 root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 
-# 2. Force Python to include it in its module search paths
 if root_path not in sys.path:
     sys.path.insert(0, root_path)
 
+# ==========================================================================================
 # STYLE
 st.markdown("""
 <style>
@@ -31,9 +31,49 @@ section[data-testid="stSidebar"] {
 </style>
 """, unsafe_allow_html=True)
 
+# ==========================================================================================
 from src.model import load_model_xgb, predict_single
-
-st.set_page_config(page_title="ChurnSense — Single Inference", page_icon="🧍", layout="wide")
+def decode_feature_value(feature_name, customer_payload):
+    """
+    For numeric features that get scaled/normalized, map back to original values.
+    For ordinal categorical features, decode the numeric code to actual category name.
+    For one-hot categorical features, the cleaned names are already readable.
+    """
+    # Ordinal feature mappings (from your OrdinalEncoder categories)
+    ordinal_mappings = {
+        'Contract': {0: 'Month-to-month', 1: 'One year', 2: 'Two year'}
+    }
+    
+    # Check if this is an ordinal feature
+    # Feature names from preprocessing look like "ordinal_cat Contract" or similar
+    if 'ordinal' in feature_name.lower():
+        # Extract the feature name (e.g., "Contract" from "ordinal_cat Contract")
+        ordinal_feature = feature_name.replace('ordinal_cat', '').replace('ordinal', '').strip()
+        
+        # Try to match to customer payload to get the encoded value
+        for orig_col, orig_value in customer_payload.items():
+            # Match the ordinal feature name to original column
+            if orig_col.lower().replace('_', '') == ordinal_feature.lower().replace(' ', '').replace('_', ''):
+                # Found the match - now decode using the ordinal mapping
+                if orig_col in ordinal_mappings:
+                    # The customer_payload has the original string value (e.g., "Month-to-month")
+                    # Just return it formatted nicely
+                    return f"{orig_col.replace('_', ' ')}: {orig_value}"
+                break
+    
+    # Try to match numeric/other features to original columns in customer_payload
+    for orig_col, orig_value in customer_payload.items():
+        # Normalize both for comparison (remove underscores, spaces, lowercase)
+        feature_normalized = feature_name.replace(' ', '').replace('_', '').lower()
+        col_normalized = orig_col.replace('_', '').lower()
+        
+        if feature_normalized == col_normalized:
+            # Found a match - return original value
+            return f"{orig_col.replace('_', ' ')}: {orig_value}"
+    
+    # If no match found in payload, return the feature name as-is
+    # (already cleaned at DataFrame level)
+    return feature_name
 
 st.title(" 🧍‍♂️ Single Customer Risk Assessment")
 st.markdown("---")
@@ -85,7 +125,6 @@ with st.form("single_customer_form"):
     submit_btn = st.form_submit_button("🔮 Compute Churn Risk Profile")
 
 if submit_btn:
-    # Bundle input features into a payload dictionary matching model parameters
     customer_payload = {
         'gender': gender, 'SeniorCitizen': SeniorCitizen, 'Partner': Partner, 'Dependents': Dependents,
         'tenure': tenure, 'PhoneService': PhoneService, 'MultipleLines': MultipleLines,
@@ -116,14 +155,13 @@ if submit_btn:
 
     # ====================================================================
     #  MODEL EVALUATION VISUALIZATIONS
-    # ====================================================================
 
     st.write("---")
     st.subheader("🎯 Model Performance & Explainability Analytics")
 
-    tab3, = st.tabs(["🧬 SHAP Feature Importance"])
+    tab1, = st.tabs(["🧬 SHAP Feature Importance"])
 
-    with tab3:
+    with tab1:
         st.markdown("#### Customer-Specific SHAP Impact Explainer")
         st.write("Features pushing this specific customer toward or away from churning.")
 
@@ -150,7 +188,25 @@ if submit_btn:
                 X_encoded = np.array(current_features)
 
             if feature_names is not None and X_encoded.shape[1] == len(feature_names):
-                X_encoded = pd.DataFrame(X_encoded, columns=feature_names)
+                # Clean feature names BEFORE creating DataFrame so SHAP uses them directly
+                cleaned_names = []
+                for fname in feature_names:
+                    # Strip preprocessing prefixes (cat:, ordinal cat:, etc.)
+                    clean_name = fname.replace('cat: ', '').replace('ordinal cat: ', '').replace('cat__', '').replace('ordinal_cat__', '').replace('num', '').replace('ordinal', '').replace('skewed', '')
+                    # Replace underscores with spaces for readability
+                    clean_name = clean_name.replace('_', ' ')
+                    cleaned_names.append(clean_name)
+                
+                X_encoded = pd.DataFrame(X_encoded, columns=cleaned_names)
+                
+                # Now decode ordinal features to show actual category names
+                # by matching feature names and values to customer_payload
+                decoded_names = []
+                for col_name in X_encoded.columns:
+                    decoded_name = decode_feature_value(col_name, customer_payload)
+                    decoded_names.append(decoded_name)
+                X_encoded.columns = decoded_names
+                
             elif hasattr(raw_model, "feature_names_in_"):
                 X_encoded = pd.DataFrame(X_encoded, columns=raw_model.feature_names_in_)
 
@@ -158,6 +214,22 @@ if submit_btn:
 
             explainer = shap.TreeExplainer(raw_model)
             shap_values = explainer(X_encoded)
+
+            # STRIP ENGINEERING PREFIXES FROM SHAP PLOT LABELS
+            if hasattr(shap_values, "feature_names") and shap_values.feature_names is not None:
+                clean_names = []
+                for name in shap_values.feature_names:
+                    # Remove structural prefixes like 'cat__' or 'ordinal_cat__'
+                    if '__' in name:
+                        name = name.split('__')[1]
+                    # Replace underscores with clean spaces for a polished presentation look
+                    clean_names.append(name.replace('_', ' '))
+                shap_values.feature_names = clean_names
+
+            fig, ax = plt.subplots(figsize=(8, 4))
+            fig.patch.set_facecolor('#1E293B')
+            ax.set_facecolor('#1E293B')
+            shap.plots.bar(shap_values[0], max_display=20, show=False)
 
             fig, ax = plt.subplots(figsize=(8, 4))
             fig.patch.set_facecolor('#1E293B')

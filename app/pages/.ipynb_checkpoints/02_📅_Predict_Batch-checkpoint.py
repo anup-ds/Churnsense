@@ -17,7 +17,6 @@ section[data-testid="stSidebar"] {
 </style>
 """, unsafe_allow_html=True)
 
-st.set_page_config(page_title="ChurnSense — Batch Processing", page_icon="📦", layout="wide")
 
 st.title("📅 High-Throughput Batch Inference Engine")
 st.markdown("---")
@@ -41,19 +40,17 @@ uploaded_file = st.file_uploader("Choose a CSV file", type=["csv"])
 
 if uploaded_file is not None:
     try:
-        # 1. Read input dataset
+        #  Read input dataset
         input_df = pd.read_csv(uploaded_file)
         st.success(f"✅ Successfully loaded {len(input_df)} customer rows.")
         
-        # 2. Run backend batch prediction
+        #  Run backend batch prediction
         with st.spinner("Processing batch calculations..."):
             predictions_df = predict_batch(model, input_df)
 
-        # === INSERT YOUR NEW ANALYTICS & NAVIGATION CODE HERE (Line 38 onwards) ===
         st.success(f"🎉 Batch processing complete! Evaluated {len(predictions_df)} customer records.")
-        #st.dataframe(predictions_df)
 
-        # 1. Save the dataframe to session state so the analytics page can read it
+        #  Save the dataframe to session state so the analytics page can read it
         st.session_state['batch_predictions'] = predictions_df
         st.session_state['trained_model'] = model
 
@@ -74,19 +71,19 @@ if uploaded_file is not None:
         st.write("---")
         st.markdown("### 📋 Processed Data Preview")
         
-        # Display the output table focusing on identifying keys and newly added columns
+        # Display the output table focusing on identifying keys and newly added column
         preview_cols = ['customerID', 'tenure', 'Contract', 'MonthlyCharges','TotalCharges', 'churn_probability', 'risk_level']
         existing_preview_cols = [col for col in preview_cols if col in predictions_df.columns]
         
         st.dataframe(predictions_df[existing_preview_cols].head(10), use_container_width=True)
         
         # 3. Generate a clean CSV string output for downloading
-        csv_buffer = predictions_df.to_csv(index=False).encode('utf-8')
+        gen_csv = predictions_df.to_csv(index=False).encode('utf-8')
         
         st.write("---")
         st.download_button(
             label="📥 Download Annotated Batch Predictions CSV",
-            data=csv_buffer,
+            data=gen_csv,
             file_name="churnsense_batch_predictions.csv",
             mime="text/csv",
             use_container_width=True
