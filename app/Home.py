@@ -66,11 +66,18 @@ st.write("---")
 img1, img2, img3 = st.columns([3, 4, 3])
 
 with img2: # This places the image inside the center column
-    st.image(
-        "https://miro.medium.com/0*dzmm3qresODlScte", 
-        caption="Analytics Overview",
-        width=300
-    )
+    gif_path = "app/assets/churn_animation.gif"
+
+# Verify the file exists (helps prevent silent errors)
+    if os.path.exists(gif_path):
+        st.image(gif_path, caption="Analyzing Customer Churn...", use_container_width=True)
+    else:
+        st.error(f"Could not find GIF at {gif_path}. Please check the file path.")
+    #st.image(
+        #"https://miro.medium.com/0*dzmm3qresODlScte", 
+        #caption="Analytics Overview",
+        #width=300
+    
 st.write("---")
 # 4. KPI Summary Cards Row
 col1, col2, col3, col4 = st.columns(4)
