@@ -1,5 +1,6 @@
-# Import necessary libraries
+# app/pages/03_📊_Analytics.py
 from unicodedata import name
+
 import matplotlib
 from sklearn.metrics import auc, roc_curve
 import streamlit as st
@@ -7,7 +8,6 @@ import pandas as pd
 import plotly.express as px
 import matplotlib.pyplot as plt
 
-# ======================================================================================
 # STYLE
 st.markdown(""" 
 <style>
@@ -25,7 +25,7 @@ section[data-testid="stSidebar"] {
 </style>
 """, unsafe_allow_html=True)
 
-# =======================================================================================
+
 
 st.title("📊 Batch Analytics Dashboard")
 st.markdown("---")
@@ -39,7 +39,6 @@ if 'batch_predictions' not in st.session_state:
         st.switch_page("pages/02_📅_Predict_Batch.py")
         
     st.stop()
-# ====================================================================
 
 # IF DATA EXISTS, LOAD IT
 df = st.session_state['batch_predictions']
@@ -61,8 +60,7 @@ with kp3:
     st.metric("Average Churn Probability", f"{avg_prob:.1%}")
 
 st.markdown("---")
-# =======================================================================================================================================
-# VISUALIZATION LAYOUT
+
 col1, col2 = st.columns(2)
 
 with col1:
@@ -91,14 +89,12 @@ with col2:
     fig_hist.update_layout(yaxis_title_text='Customer Count')
     st.plotly_chart(fig_hist, use_container_width=True)
 
-# ===============================================================================================================================================
-# Performance Metrics Tabs
-
 tab1, tab2, tab3, tab4= st.tabs(["Confusion Matrix", "Roc-Auc Curve", "Precision-Recall Curve", "SHAP Feature Importance"])
 
-
+   # Dynamic guard check to see if ground-truth target is provided
+#has_true_labels = 'Churn' in df.columns
 with tab1:
-    # ---PLOTLY CONFUSION MATRIX---
+    # --- ADD THIS: PLOTLY CONFUSION MATRIX IN TAB 1 ---
         st.markdown("---")
         st.subheader("🧩 Confusion Matrix")
         st.write("Track true classification boundaries against actual false alarms.")
@@ -110,7 +106,7 @@ with tab1:
         # Compute raw confusion matrix values
         # Assumes your model threshold defaults to 0.5 for binary classification
         # Optimize the binary threshold to account for the 2.77x minority class weight scale
-        prediction_threshold = 0.38
+        prediction_threshold = 0.38 
         y_pred = (df['churn_probability'] > prediction_threshold).astype(int)
         cm = confusion_matrix(y_true, y_pred)
         

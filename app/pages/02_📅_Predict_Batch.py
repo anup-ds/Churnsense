@@ -1,8 +1,9 @@
-# app/pages/02_📦_Predict_Batch.py
+# Import necessary libraries
 import streamlit as st
 import pandas as pd
 from src.model import load_model_xgb, predict_batch
 
+# ======================================================================================
 # STYLE
 st.markdown("""
 <style>
@@ -16,7 +17,7 @@ section[data-testid="stSidebar"] {
 
 </style>
 """, unsafe_allow_html=True)
-
+# ========================================================================================
 
 st.title("📅 High-Throughput Batch Inference Engine")
 st.markdown("---")
@@ -31,6 +32,7 @@ try:
 except Exception as e:
     st.error(f"Failed to load model file. Error: {e}")
     st.stop()
+# ========================================================================================
 
 st.subheader("📤 Upload Customer Dataset")
 st.markdown("Upload a raw `.csv` spreadsheet containing customer records. The engine will automatically evaluate risk parameters for every account.")
@@ -93,8 +95,8 @@ if uploaded_file is not None:
         st.error(f"Error compiling batch spreadsheet processing. Ensure data schema matches features. Details: {e}")
         
         st.markdown("---")
-        st.subheader("📊 Explore Batch Diagnostics")
-        st.markdown("Ready to view deeper statistical breakdowns, distributions, and churn correlations for this specific batch?")
+    st.subheader("📊 Explore Batch Diagnostics")
+    st.markdown("Ready to view deeper statistical breakdowns, distributions, and churn correlations for this specific batch?")
 
 # 2. Render the primary navigation button
     if st.button("📊 Go to Batch Analytics", type="primary"):

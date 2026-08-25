@@ -1,31 +1,31 @@
-# app/streamlit_app.py
+# Importing necessary libraries
+
 import os
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import sys
 import os
-from src.model import load_model_xgb
 import shap
 import matplotlib.pyplot as plt
 import numpy as np
 
-# 🚀 Datively find the root project directory and append it to Python's search path
+#  Dynamically find the main 'churnsense' project directory root
 root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 if root_path not in sys.path:
     sys.path.insert(0, root_path)
 
 
-# 1. Page Configuration
+#  Page Configuration
 st.set_page_config(
     page_title="ChurnSense — Analytics Hub",
     page_icon= "https://miro.medium.com/0*dzmm3qresODlScte",
     layout="wide"
 )
 
-
-# STYLE
+# =================================================================
+# STYLE (CSS)
 st.markdown("""
 <style>
 section[data-testid="stAppViewContainer"] {
@@ -39,8 +39,9 @@ section[data-testid="stSidebar"] {
 
 </style>
 """, unsafe_allow_html=True)
+#====================================================================
 
-# 2. Cached Data Loader
+# Cached Data Loader
 @st.cache_data
 def load_data():
     """Loads and caches dataset to maintain quick interface rendering."""
@@ -48,7 +49,6 @@ def load_data():
     if os.path.exists(data_path):
         data = pd.read_csv(data_path)
         
-        # ✨ FIX THE VALUE ERROR HERE:
         # Convert empty strings " " to NaN, then fill them with 0
         data['TotalCharges'] = pd.to_numeric(data['TotalCharges'], errors='coerce')
         data['TotalCharges'] = data['TotalCharges'].fillna(0)
@@ -59,23 +59,28 @@ def load_data():
 
 df = load_data()
 
-# 3. App Title Header
+# 1. App Title Header
 st.title("ChurnSense — Customer Analytics Hub")
 st.markdown("### *AI-Powered Customer Churn Prediction Framework*")
 st.write("---")
+
+# 2. GIF Animation Row
 img1, img2, img3 = st.columns([3, 4, 3])
 
-with img2: # This places the image inside the center column
-    st.image(
-        "https://miro.medium.com/0*dzmm3qresODlScte", 
-        caption="Analytics Overview",
-        width=300
-    )
+with img2: 
+    gif_path = "app/assets/churn_animation.gif"
+
+    if os.path.exists(gif_path):
+        st.image(gif_path, caption="Analyzing Customer Churn...", use_container_width=True)
+    else:
+        st.error(f"Could not find GIF at {gif_path}. Please check the file path.")
 st.write("---")
-# 4. KPI Summary Cards Row
+
+# 3. KPI Summary Cards Row
 col1, col2, col3, col4 = st.columns(4)
 
 total_customers = len(df)
+
 # Calculate baseline churn directly from data
 baseline_churn = (df['Churn'].isin(['Yes', 1])).mean() * 100
 
@@ -105,7 +110,8 @@ with col4:
     )
 
 st.write("---")
-# 5. Descriptive Insights Grid
+
+# 4. Descriptive Insights Grid
 left_col, right_col = st.columns(2)
 with left_col:
     st.subheader("📊 Operational Objectives")
@@ -114,9 +120,10 @@ with left_col:
     * **Proactive Retention:** Optimize marketing outreach allocation using precise data.
     * **High-Throughput Analytics:** Streamline batch assessment operations via raw spreadsheet processing.
     """)
-    
+# SHAP Bar plot visualization for feature importance    
 with right_col:
- 
+    from src.model import load_model_xgb
+
     # 1. Load the cached model pipeline
     @st.cache_resource
     def get_inference_pipeline():
@@ -138,7 +145,7 @@ with right_col:
  
     # 3. Transform data for SHAP evaluation
     try:
-        # Drop target variable to match feature spaces
+        # Drop target variable
         X_test = df.drop(columns=['Churn'], errors='ignore')
         X_test_transformed = prep.transform(X_test)
         
@@ -158,25 +165,24 @@ with right_col:
         explainer = shap.TreeExplainer(raw_classifier)
         shap_values = explainer(X_test_transformed)
         
-        # Inject pristine feature names into the SHAP object before drawing
+        # Input  feature names into the SHAP object before drawing
         shap_values.feature_names = clean_names
  
         fig, ax = plt.subplots(figsize=(10, 5))
         fig.patch.set_facecolor('none')      # Transparent outer background
         ax.set_facecolor('#1E293B')
  
-        # Homepage teaser: top 8 features only. Full 15+ feature view lives on Analytics page.
+        # top 8 features only. Full 15+ feature view lives on Analytics page.
         shap.plots.bar(shap_values, max_display=8, show=False)
  
         for patch in ax.patches:
-            patch.set_facecolor('#06B6D4')  # Elegant Cyan bar fill
-            patch.set_edgecolor('#FFFFFF')  # Crisp White bar border
+            patch.set_facecolor('#06B6D4')  # Blue bar fill
+            patch.set_edgecolor('#FFFFFF')  # White bar border
             patch.set_alpha(0.9)
  
         for text in ax.texts:
             text.set_color('#FFFFFF')      # Forces all bar labels to white
             text.set_fontsize(10)
-            # mean(|SHAP value|) is a magnitude, not a signed contribution —
             # strip the misleading "+" prefix that implies "increases churn"
             label = text.get_text().strip()
             if label.startswith('+'):

@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import sys
 import os
+from src.model import load_model_xgb, predict_single
 
 #  Dynamically find the main 'churnsense' project directory root
 root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
@@ -25,26 +26,20 @@ section[data-testid="stSidebar"] {
     background: linear-gradient(180deg, #2C3E50, #4CA1AF);
     color: white;
 }
-
-}
-
 </style>
 """, unsafe_allow_html=True)
 
 # ==========================================================================================
-from src.model import load_model_xgb, predict_single
+
 def decode_feature_value(feature_name, customer_payload):
     """
     For numeric features that get scaled/normalized, map back to original values.
     For ordinal categorical features, decode the numeric code to actual category name.
     For one-hot categorical features, the cleaned names are already readable.
     """
-    # Ordinal feature mappings (from your OrdinalEncoder categories)
-    ordinal_mappings = {
-        'Contract': {0: 'Month-to-month', 1: 'One year', 2: 'Two year'}
-    }
+    # Ordinal feature mappings from the OrdinalEncoder categories
+    ordinal_mappings = {'Contract': {0: 'Month-to-month', 1: 'One year', 2: 'Two year'}}
     
-    # Check if this is an ordinal feature
     # Feature names from preprocessing look like "ordinal_cat Contract" or similar
     if 'ordinal' in feature_name.lower():
         # Extract the feature name (e.g., "Contract" from "ordinal_cat Contract")
@@ -74,6 +69,7 @@ def decode_feature_value(feature_name, customer_payload):
     # If no match found in payload, return the feature name as-is
     # (already cleaned at DataFrame level)
     return feature_name
+# ===================================================================================================================
 
 st.title(" 🧍‍♂️ Single Customer Risk Assessment")
 st.markdown("---")
@@ -89,7 +85,10 @@ except Exception as e:
     st.error(f"Failed to load model file. Verify it exists in the models/ folder. Error: {e}")
     st.stop()
 
+
+# ===================================================================================================================
 # Interactive Form Setup
+
 with st.form("single_customer_form"):
     st.subheader("📋 Customer Demographics & Profile Parameters")
     
@@ -139,7 +138,8 @@ if submit_btn:
     
     st.write("---")
     st.subheader("📊 Prediction Assessment Outputs")
-    
+
+    # RESULTS
     res_col1, res_col2 = st.columns(2)
     with res_col1:
         st.metric(label="Calculated Churn Probability", value=f"{result['churn_probability'] * 100:.2f}%")
@@ -152,20 +152,20 @@ if submit_btn:
             st.warning(f"⚡ **Risk Categorization: MEDIUM RISK PROFILE**")
         else:
             st.success(f"✅ **Risk Categorization: LOW RISK PROFILE**")
+    st.write("---")
 
-    # ====================================================================
+    # =============================================================================================================n
     #  MODEL EVALUATION VISUALIZATIONS
 
     st.write("---")
     st.subheader("🎯 Model Performance & Explainability Analytics")
-
+    
     tab1, = st.tabs(["🧬 SHAP Feature Importance"])
 
     with tab1:
         st.markdown("#### Customer-Specific SHAP Impact Explainer")
         st.write("Features pushing this specific customer toward or away from churning.")
-
-        
+     
         try:
             df_input = pd.DataFrame([customer_payload])
 
@@ -193,7 +193,7 @@ if submit_btn:
                 for fname in feature_names:
                     # Strip preprocessing prefixes (cat:, ordinal cat:, etc.)
                     clean_name = fname.replace('cat: ', '').replace('ordinal cat: ', '').replace('cat__', '').replace('ordinal_cat__', '').replace('num', '').replace('ordinal', '').replace('skewed', '')
-                    # Replace underscores with spaces for readability
+                    # Replace underscores with spaces
                     clean_name = clean_name.replace('_', ' ')
                     cleaned_names.append(clean_name)
                 
